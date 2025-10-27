@@ -243,8 +243,24 @@ static void arena_reset_to_mark(Arena* self, size_t mark) {
         return;
     }
 
-    if (mark <= self->size) {
-        self->offset = mark;
+    Arena* head = self->head;
+    Arena* current = head;
+    size_t cumulative_size = 0;
+    bool found = false;
+
+    while (current != NULL) {
+        size_t next_cumulative = cumulative_size + current->size;
+
+        if (!found && mark <= next_cumulative) {
+            current->offset = mark - cumulative_size;
+            found = true;
+        } else if (found) {
+            current->offset = 0;
+            current->allocation_count = 0;
+        }
+
+        cumulative_size = next_cumulative;
+        current = current->next;
     }
 }
 
@@ -252,7 +268,20 @@ static size_t arena_get_mark(Arena* self) {
     if (!self) {
         return 0;
     }
-    return self->offset;
+
+    Arena* head = self->head;
+    Arena* current = head;
+    size_t cumulative_offset = 0;
+
+    while (current != NULL) {
+        if (current == self) {
+            return cumulative_offset + current->offset;
+        }
+        cumulative_offset += current->offset;
+        current = current->next;
+    }
+
+    return cumulative_offset;
 }
 
 static bool arena_resize(Arena* self, size_t new_size) {
